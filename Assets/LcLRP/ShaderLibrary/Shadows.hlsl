@@ -5,9 +5,6 @@
 
 #define MAX_SHADOWED_DIRECTIONAL_LIGHT_COUNT 4
 
-TEXTURE2D(_DirectionalShadowAtlas);
-SAMPLER(sampler_DirectionalShadowAtlas);
-
 CBUFFER_START(_CustomShadows)
     float4x4 _DirectionalShadowMatrices[MAX_SHADOWED_DIRECTIONAL_LIGHT_COUNT];
 CBUFFER_END
