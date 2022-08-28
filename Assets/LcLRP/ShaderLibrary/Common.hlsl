@@ -14,7 +14,13 @@
 #include "Packages/com.unity.render-pipelines.core/ShaderLibrary/UnityInstancing.hlsl"
 #include "Packages/com.unity.render-pipelines.core/ShaderLibrary/SpaceTransforms.hlsl"
 
-float Square (float v) {
-	return v * v;
+float Square(float v)
+{
+    return v * v;
+}
+// 距离平方
+float DistanceSquared(float3 pA, float3 pB)
+{
+    return dot(pA - pB, pA - pB);
 }
 #endif
