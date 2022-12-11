@@ -59,7 +59,9 @@ public partial class CameraRenderer
                 enableDynamicBatching = useDynamicBatching,
                 enableInstancing = useGPUInstancing,
                 // Lightmap和探针数据传递到GPU
-                perObjectData = PerObjectData.Lightmaps | PerObjectData.LightProbe | PerObjectData.LightProbeProxyVolume
+                perObjectData = PerObjectData.ReflectionProbes | PerObjectData.Lightmaps | PerObjectData.ShadowMask |
+                PerObjectData.LightProbe | PerObjectData.OcclusionProbe |
+                PerObjectData.LightProbeProxyVolume | PerObjectData.OcclusionProbeProxyVolume
             };
             drawingSettings.SetShaderPassName(1, litShaderTagId);
             // 先绘制不透明物体

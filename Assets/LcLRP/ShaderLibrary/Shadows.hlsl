@@ -36,13 +36,18 @@ CBUFFER_END
 
 
 
-
+struct ShadowMask
+{
+    bool distance;
+    float4 shadows;
+};
 struct ShadowData
 {
     int cascadeIndex;
     // 级联混合值(为了解决PCF级联边界过渡太明显)
     float cascadeBlend;
     float strength;
+    ShadowMask shadowMask;
 };
 
 
@@ -56,6 +61,8 @@ float FadedShadowStrength(float distance, float scale, float fade)
 ShadowData GetShadowData(Surface surfaceWS)
 {
     ShadowData data;
+    data.shadowMask.distance = false;
+    data.shadowMask.shadows = 1.0;
     data.cascadeBlend = 1.0;
     // data.strength = surfaceWS.depth < _ShadowDistance ? 1.0 : 0.0;
     data.strength = FadedShadowStrength(surfaceWS.depth, _ShadowDistanceFade.x, _ShadowDistanceFade.y);
@@ -107,6 +114,7 @@ struct DirectionalShadowData
     float strength;
     int tileIndex;
     float normalBias;
+    int shadowMaskChannel;
 };
 
 
@@ -136,34 +144,79 @@ float FilterDirectionalShadow(float3 positionSTS)
     #endif
 }
 
-// 阴影衰减
-float GetDirectionalShadowAttenuation(DirectionalShadowData  directional, ShadowData global, Surface surfaceWS)
+
+float GetCascadedShadow(DirectionalShadowData directional, ShadowData shadowData, Surface surfaceWS)
 {
-    #if !defined(_RECEIVE_SHADOWS)
-        return 1.0;
-    #endif
-    // 阴影强度小于等于0时不采样Shadow Map
-    if (directional.strength <= 0.0)
-    {
-        return 1.0;
-    }
     // 沿着法线偏移
-    float3 normalBias = surfaceWS.normal * (directional.normalBias * _CascadeData[global.cascadeIndex].y);
+    float3 normalBias = surfaceWS.interpolatedNormal * (directional.normalBias * _CascadeData[shadowData.cascadeIndex].y);
     float3 positionSTS = mul(_DirectionalShadowMatrices[directional.tileIndex], float4(surfaceWS.position + normalBias, 1.0)).xyz;
     // float shadow = SampleDirectionalShadowAtlas(positionSTS);
     float shadow = FilterDirectionalShadow(positionSTS);
 
     // 级联软混合模式
-    if (global.cascadeBlend < 1.0)
+    if (shadowData.cascadeBlend < 1.0)
     {
         // 处于级联阴影过渡处, 和下一个级联做一个插值混合.
-        normalBias = surfaceWS.normal * (directional.normalBias * _CascadeData[global.cascadeIndex + 1].y);
+        normalBias = surfaceWS.interpolatedNormal * (directional.normalBias * _CascadeData[shadowData.cascadeIndex + 1].y);
         positionSTS = mul(_DirectionalShadowMatrices[directional.tileIndex + 1], float4(surfaceWS.position + normalBias, 1.0)).xyz;
-        shadow = lerp(FilterDirectionalShadow(positionSTS), shadow, global.cascadeBlend);
+        shadow = lerp(FilterDirectionalShadow(positionSTS), shadow, shadowData.cascadeBlend);
     }
-    
-    return lerp(1.0, shadow, directional.strength);
+    return shadow;
 }
+
+float GetBakedShadow(ShadowMask mask, int channel)
+{
+    float shadow = 1.0;
+    // 开启了Distance Mode
+    if (mask.distance)
+    {
+        if (channel >= 0)
+        {
+            shadow = mask.shadows[channel];
+        }
+    }
+    return shadow;
+}
+float GetBakedShadow(ShadowMask mask, int channel, float strength)
+{
+    if (mask.distance)
+    {
+        return lerp(1.0, GetBakedShadow(mask, channel), strength);
+    }
+    return 1.0;
+}
+// 混合烘焙阴影和实时阴影
+float MixBakedAndRealtimeShadows(ShadowData shadowData, float shadow, int shadowMaskChannel, float strength)
+{
+    float baked = GetBakedShadow(shadowData.shadowMask, shadowMaskChannel);
+    if (shadowData.shadowMask.distance)
+    {
+        shadow = lerp(baked, shadow, shadowData.strength);
+        return lerp(1.0, shadow, strength);
+    }
+    return lerp(1.0, shadow, strength * shadowData.strength);
+}
+
+// 阴影衰减
+float GetDirectionalShadowAttenuation(DirectionalShadowData  directional, ShadowData shadowData, Surface surfaceWS)
+{
+    #if !defined(_RECEIVE_SHADOWS)
+        return 1.0;
+    #endif
+    float shadow;
+    // 阴影强度小于等于0时不采样Shadow Map
+    if (directional.strength * shadowData.strength <= 0.0)
+    {
+        shadow = GetBakedShadow(shadowData.shadowMask, directional.shadowMaskChannel, abs(directional.strength));
+    }
+    else
+    {
+        shadow = GetCascadedShadow(directional, shadowData, surfaceWS);
+        shadow = MixBakedAndRealtimeShadows(shadowData, shadow, directional.shadowMaskChannel, directional.strength);
+    }
+    return shadow;
+}
+
 
 
 #endif

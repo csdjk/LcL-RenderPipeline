@@ -1,6 +1,5 @@
 ﻿#ifndef CUSTOM_SHADOW_CASTER_PASS_INCLUDED
 #define CUSTOM_SHADOW_CASTER_PASS_INCLUDED
-// #include "LitInput.hlsl"
 
 struct Attributes
 {
@@ -29,7 +28,6 @@ Varyings ShadowCasterPassVertex(Attributes input)
     #else
         output.positionCS.z = max(output.positionCS.z, output.positionCS.w * UNITY_NEAR_CLIP_VALUE);
     #endif
-
     output.baseUV = TransformBaseUV(input.baseUV);
     return output;
 }
@@ -37,11 +35,12 @@ Varyings ShadowCasterPassVertex(Attributes input)
 void ShadowCasterPassFragment(Varyings input)
 {
     UNITY_SETUP_INSTANCE_ID(input);
+    InputConfig config = GetInputConfig(input.baseUV);
 
-    float4 base = GetBase(input.baseUV);
+    float4 base = GetBase(config);
     #if defined(_SHADOWS_CLIP)
         // 阴影裁剪
-        clip(base.a - GetCutoff(input.baseUV));
+        clip(base.a - GetCutoff());
     #elif defined(_SHADOWS_DITHER)
         // 阴影抖动
         float dither = InterleavedGradientNoise(input.positionCS.xy, 0);
